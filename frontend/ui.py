@@ -29,9 +29,12 @@ array_pesanan = Array()
 linked_list_pesanan = LinkedList()
 menu_aktif = None
 BATAS_TAMPIL = 50
-antrean_undo = AntreanDenganUndo(kapasitas=5)
 antrean_naif = NaiveQueue()
-antrean_circular = CircularQueue(kapasitas=200000)
+antrean_circular = CircularQueue(kapasitas=5)
+antrean_undo = AntreanDenganUndo(
+    antrean_naif,
+    antrean_circular
+)
 
 root = tk.Tk()
 root.title("2EZ4U Food Delivery")
@@ -636,9 +639,6 @@ def _form_tambah_pesanan(struktur, jenis):
             "VIP": "tambah_vip"
         }[jenis])(pesanan)
 
-        # Catat aksi tambah ke stack Undo
-        antrean_undo.enqueue(pesanan)
-
         data_pesanan = koleksi.lihat()
 
 
@@ -1007,7 +1007,7 @@ def tampilkan_stack_undo():
         pady=(0, 8)
     )
 
-    kolom = ("nomor", "oid", "pelanggan", "resto", "menu")
+    kolom = ("nomor", "aksi", "oid", "pelanggan", "resto", "menu")
 
     tabel = ttk.Treeview(
         frame_tabel,
@@ -1017,12 +1017,14 @@ def tampilkan_stack_undo():
     )
 
     tabel.heading("nomor", text="#")
+    tabel.heading("aksi", text="Aksi")
     tabel.heading("oid", text="oid")
     tabel.heading("pelanggan", text="pelanggan")
     tabel.heading("resto", text="resto")
     tabel.heading("menu", text="menu")
 
     tabel.column("nomor", width=35, anchor="center")
+    tabel.column("aksi", width=150, anchor="center")
     tabel.column("oid", width=100, anchor="center")
     tabel.column("pelanggan", width=130, anchor="center")
     tabel.column("resto", width=120, anchor="center")
@@ -1068,38 +1070,47 @@ def tampilkan_stack_undo():
         riwayat = antrean_undo.history()
         
         for nomor, aksi in enumerate(riwayat, start=1):
-            oid = "-"
-            pelanggan = "-"
-            resto = "-"
-            menu = "-"
+            jenis = aksi[0]
+            data = aksi[1]
 
-            if isinstance(aksi, (tuple, list)) and len(aksi) >= 2:
-                pesanan = aksi[1]
+            nama_aksi = {
+                "ENQUEUE": "ENQUEUE",
+                "DEQUEUE_NAIVE": "DEQUEUE NAIVE",
+                "DEQUEUE_CIRCULAR": "DEQUEUE CIRCULAR"
+            }.get(jenis, jenis)
 
-                # Format aksi ENQUEUE: ("ENQUEUE", pesanan)
-                if isinstance(pesanan, (tuple, list)) and len(pesanan) >= 4:
-                    oid = pesanan[0]
-                    pelanggan = pesanan[1]
-                    resto = pesanan[2]
-                    menu = pesanan[3]
+            if jenis == "ENQUEUE":
+                daftar_pesanan = [data]
+            else:
+                daftar_pesanan = data
 
-                # Format aksi DEQUEUE: ("DEQUEUE", [pesanan])
-                elif isinstance(pesanan, (tuple, list)) and len(pesanan) > 0:
-                    data = pesanan[0]
+            for nomor_pesanan, pesanan in enumerate(
+                daftar_pesanan, start=1
+            ):
+                if not isinstance(pesanan, (tuple, list)):
+                    continue
 
-                    if isinstance(data, (tuple, list)) and len(data) >= 4:
-                        oid = data[0]
-                        pelanggan = data[1]
-                        resto = data[2]
-                        menu = data[3]
+                if len(pesanan) < 4:
+                    continue
 
-            tabel.insert(
-                "",
-                "end",
-                values=(nomor, oid, pelanggan, resto, menu)
-            )
+                nomor_tampil = (
+                    str(nomor)
+                    if len(daftar_pesanan) == 1
+                    else f"{nomor}.{nomor_pesanan}"
+                )
 
-
+                tabel.insert(
+                    "",
+                    "end",
+                    values=(
+                        nomor_tampil,
+                        nama_aksi,
+                        pesanan[0],
+                        pesanan[1],
+                        pesanan[2],
+                        pesanan[3]
+                    )
+                )
 
         status.config(
             text=f"Total aksi yang dapat dibatalkan: {len(riwayat)}"
@@ -1200,7 +1211,7 @@ def tampilkan_stack_redo():
         pady=(0, 8)
     )
 
-    kolom = ("nomor", "oid", "pelanggan", "resto", "menu")
+    kolom = ("nomor", "aksi", "oid", "pelanggan", "resto", "menu")
 
     tabel = ttk.Treeview(
         frame_tabel,
@@ -1210,12 +1221,14 @@ def tampilkan_stack_redo():
     )
 
     tabel.heading("nomor", text="#")
+    tabel.heading("aksi", text="Aksi")
     tabel.heading("oid", text="oid")
     tabel.heading("pelanggan", text="pelanggan")
     tabel.heading("resto", text="resto")
     tabel.heading("menu", text="menu")
 
     tabel.column("nomor", width=35, anchor="center")
+    tabel.column("aksi", width=150, anchor="center")
     tabel.column("oid", width=100, anchor="center")
     tabel.column("pelanggan", width=130, anchor="center")
     tabel.column("resto", width=120, anchor="center")
@@ -1280,34 +1293,48 @@ def tampilkan_stack_redo():
         riwayat_redo = antrean_undo.redo_stack.data.copy()
 
         for nomor, aksi in enumerate(reversed(riwayat_redo), start=1):
-            oid = "-"
-            pelanggan = "-"
-            resto = "-"
-            menu = "-"
+            jenis = aksi[0]
+            data = aksi[1]
 
-            if isinstance(aksi, (tuple, list)) and len(aksi) >= 2:
-                pesanan = aksi[1]
+            nama_aksi = {
+                "ENQUEUE": "ENQUEUE",
+                "DEQUEUE_NAIVE": "DEQUEUE NAIVE",
+                "DEQUEUE_CIRCULAR": "DEQUEUE CIRCULAR"
+            }.get(jenis, jenis)
 
-                if isinstance(pesanan, (tuple, list)) and len(pesanan) >= 4:
-                    oid = str(pesanan[0])
-                    pelanggan = str(pesanan[1])
-                    resto = str(pesanan[2])
-                    menu = str(pesanan[3])
+            if jenis == "ENQUEUE":
+                daftar_pesanan = [data]
+            else:
+                daftar_pesanan = data
 
-                elif isinstance(pesanan, (tuple, list)) and len(pesanan) > 0:
-                    data = pesanan[0]
+            for nomor_pesanan, pesanan in enumerate(
+                daftar_pesanan, start=1
+            ):
+                if not isinstance(pesanan, (tuple, list)):
+                    continue
 
-                    if isinstance(data, (tuple, list)) and len(data) >= 4:
-                        oid = str(data[0])
-                        pelanggan = str(data[1])
-                        resto = str(data[2])
-                        menu = str(data[3])
+                if len(pesanan) < 4:
+                    continue
 
-            tabel.insert(
-                "",
-                "end",
-                values=(nomor, oid, pelanggan, resto, menu)
-            )
+                nomor_tampil = (
+                    str(nomor)
+                    if len(daftar_pesanan) == 1
+                    else f"{nomor}.{nomor_pesanan}"
+                )
+
+                tabel.insert(
+                    "",
+                    "end",
+                    values=(
+                        nomor_tampil,
+                        nama_aksi,
+                        pesanan[0],
+                        pesanan[1],
+                        pesanan[2],
+                        pesanan[3]
+                    )
+                )
+
 
 
         status.config(
@@ -2055,7 +2082,7 @@ def tampilkan_queue_enqueue():
 
         mulai = time.perf_counter()
 
-        berhasil = antrean_circular.enqueue(pesanan_baru)
+        berhasil = antrean_undo.enqueue(pesanan_baru)
 
         if not berhasil:
             messagebox.showwarning(
@@ -2063,8 +2090,6 @@ def tampilkan_queue_enqueue():
                 "Pesanan gagal ditambahkan."
             )
             return
-
-        antrean_naif.enqueue(pesanan_baru)
 
         selesai = time.perf_counter()
         durasi_ms = (selesai - mulai) * 1000
@@ -2393,10 +2418,7 @@ def tampilkan_dequeue_naif():
 
         waktu_mulai = time.perf_counter()
 
-        for _ in range(jumlah_aktual):
-            pesanan = antrean_naif.dequeue()
-            if pesanan is not None:
-                pesanan_keluar.append(pesanan)
+        pesanan_keluar = antrean_undo.dequeue_naive(jumlah_aktual)
 
         waktu_selesai = time.perf_counter()
 
@@ -2628,11 +2650,7 @@ def tampilkan_dequeue_circular():
 
         mulai = time.perf_counter()
 
-        for _ in range(jumlah_proses):
-            pesanan = antrean_circular.dequeue()
-
-            if pesanan is not None:
-                pesanan_dihapus.append(pesanan)
+        pesanan_dihapus = antrean_undo.dequeue_circular(jumlah_proses)
 
         selesai = time.perf_counter()
         durasi_ms = (selesai - mulai) * 1000

@@ -49,7 +49,7 @@ class Array:
             self.data = data_baru
 
         for i in range(self.size, posisi, -1):
-            self.data[i] = self.data[i - 1]
+            self.data[i] = self.data[i - 1] #ini tuh maksudnya yang awalnya di index 2 jadi index 3
 
         self.data[posisi] = pesanan
         self.size += 1
@@ -68,12 +68,12 @@ class Array:
         for i in range(self.size, 0, -1):
             self.data[i] = self.data[i - 1]
 
-        self.data[0] = pesanan
+        self.data[0] = pesanan #ini biar pesananannya ditaro di paling depan yaitu index 0S
         self.size += 1
     
     def lihat(self, index=None):
         if index is None:
-            hasil = []
+            hasil = [] #ini menyiapkan untuk nnti hasil mau dilihat index brp
 
             for i in range(self.size):
                 hasil.append(self.data[i])
@@ -81,7 +81,7 @@ class Array:
             return hasil
 
         if index < 0 or index >= self.size:
-            return None
+            return False
 
         return self.data[index]
     
@@ -90,7 +90,7 @@ class Array:
             return False
 
         for i in range(index, self.size - 1):
-            self.data[i] = self.data[i + 1]
+            self.data[i] = self.data[i + 1] #ini yang awalnya 3 jadi 2, soalnya dia gser ke kiri
 
         self.size -= 1
         self.data[self.size] = None
@@ -107,7 +107,7 @@ class LinkedList:
     def __init__(self):
         self.head = None
         self.tail = None
-        self.size = 0
+        self.size = 0 #jumlah node awalnya nol
 
     def tambah_belakang(self, pesanan):
         node_baru = Node(pesanan)
@@ -116,8 +116,8 @@ class LinkedList:
             self.head = node_baru
             self.tail = node_baru
         else:
-            self.tail.next = node_baru
-            self.tail = node_baru
+            self.tail.next = node_baru #ini tuh masih menghubungkan aja 
+            self.tail = node_baru #kalau ini tuh mindahin tahta tail ke node baru
 
         self.size += 1
         
@@ -133,13 +133,7 @@ class LinkedList:
             return
 
         posisi = self.size // 2
-
-        if posisi == 0:
-            node_baru.next = self.head
-            self.head = node_baru
-            self.size += 1
-            return
-
+        
         current = self.head
 
         for i in range(posisi - 1):
@@ -154,7 +148,7 @@ class LinkedList:
         node_baru = Node(pesanan)
 
         node_baru.next = self.head
-        self.head = node_baru
+        self.head =  node_baru
 
         if self.tail is None:
             self.tail = node_baru
@@ -173,7 +167,7 @@ class LinkedList:
             return hasil
 
         if index < 0 or index >= self.size:
-            return None
+            return False
 
         current = self.head
 

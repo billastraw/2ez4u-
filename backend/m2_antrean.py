@@ -28,11 +28,12 @@ def prioritas(operator):
 
 
 def ke_postfix(ekspresi):
-    tokens = re.findall(r"\d+|[()+\-*/]|\S", ekspresi)
+    tokens = re.findall(r"\d+|[()+\-*/]|\S", ekspresi) #memisahkan ekspresi
 
     # Memastikan semua karakter yang digunakan valid
-    ekspresi_bersih = re.sub(r"\s+", "", ekspresi)
-    if "".join(tokens) != ekspresi_bersih:
+    ekspresi_bersih = re.sub(r"\s+", "", ekspresi) #re.sub itu mengganti yang awalnya spasi jdi "" yaitu tanpa spasi 
+    if "".join(tokens) != ekspresi_bersih: #ini ngecek aja supaya yang udah dipisah wkatu digabung itu sama dengan yang udah dibersihin
+        #pake ekspresi bersih
         raise ValueError("Ekspresi mengandung karakter tidak valid.")
 
     output = []
@@ -145,7 +146,7 @@ class NaiveQueue:
         self.data = []
         self.total_shifts = 0
 
-    def enqueue(self, item):
+    def enqueue(self, item): #enqueue itu menambah ke paling belakang
         self.data.append(item)
 
     def dequeue(self):
@@ -161,6 +162,18 @@ class NaiveQueue:
 
     def size(self):
         return len(self.data)
+    
+    def enqueue_front(self, item):
+        self.data.insert(0, item)
+        self.total_shifts += len(self.data) - 1
+        return True
+
+    def dequeue_rear(self):
+        if len(self.data) == 0:
+            return None
+
+        return self.data.pop()
+
 
 
 class CircularQueue:
@@ -245,100 +258,181 @@ class RiwayatAksi:
 
 
 
+
 class AntreanDenganUndo:
-    def __init__(self, kapasitas=10):
-        self.antrean = CircularQueue(kapasitas)
+    def __init__(self, antrean_naif, antrean_circular):
+        self.antrean_naif = antrean_naif
+        self.antrean_circular = antrean_circular
         self.undo_stack = Stack()
         self.redo_stack = Stack()
 
     def enqueue(self, item):
-        berhasil = self.antrean.enqueue(item)
-
-        if not berhasil:
+        # Circular harus berhasil lebih dahulu
+        if not self.antrean_circular.enqueue(item):
             return False
 
-        self.undo_stack.push(("ENQUEUE", item))
+        # Pesanan yang sama dimasukkan ke Naive Queue
+        self.antrean_naif.enqueue(item)
+
+        self.undo_stack.push(("ENQUEUE", item.copy()))
         self.redo_stack = Stack()
+
         return True
 
-    def dequeue(self):
-        item = self.antrean.dequeue()
+    def dequeue_naive(self, jumlah=1):
+        daftar_pesanan = []
 
-        if item is None:
-            return None
+        for _ in range(jumlah):
+            item = self.antrean_naif.dequeue()
 
-        # Simpan pesanan agar bisa dikembalikan saat undo
-        self.undo_stack.push(("DEQUEUE", [item]))
-        self.redo_stack = Stack()
-        return item
+            if item is None:
+                break
+
+            daftar_pesanan.append(item)
+
+        if daftar_pesanan:
+            self.undo_stack.push(
+                ("DEQUEUE_NAIVE", daftar_pesanan.copy())
+            )
+            self.redo_stack = Stack()
+
+        return daftar_pesanan
+
+    def dequeue_circular(self, jumlah=1):
+        daftar_pesanan = []
+
+        for _ in range(jumlah):
+            item = self.antrean_circular.dequeue()
+
+            if item is None:
+                break
+
+            daftar_pesanan.append(item)
+
+        if daftar_pesanan:
+            self.undo_stack.push(
+                ("DEQUEUE_CIRCULAR", daftar_pesanan.copy())
+            )
+            self.redo_stack = Stack()
+
+        return daftar_pesanan
+
+    def _id_sama(self, item_a, item_b):
+        return (
+            item_a is not None
+            and item_b is not None
+            and item_a[0] == item_b[0]
+        )
+
+    def _kembalikan_ke_depan(self, antrean, daftar_pesanan):
+        berhasil = []
+
+        for item in reversed(daftar_pesanan):
+            if not antrean.enqueue_front(item):
+                # Batalkan pemulihan parsial jika gagal
+                for _ in berhasil:
+                    antrean.dequeue()
+                return False
+
+            berhasil.append(item)
+
+        return True
 
     def undo(self):
         if self.undo_stack.is_empty():
             return None
 
         aksi = self.undo_stack.peek()
+        jenis = aksi[0]
+        data = aksi[1]
 
-        if aksi[0] == "ENQUEUE":
-            item = self.antrean.dequeue_rear()
+        if jenis == "ENQUEUE":
+            naive = self.antrean_naif.dequeue_rear()
+            circular = self.antrean_circular.dequeue_rear()
 
-            if item is None:
+            if not self._id_sama(naive, data) or not self._id_sama(
+                circular, data
+            ):
+                # Pulihkan jika kedua antrean tidak sesuai
+                if naive is not None:
+                    self.antrean_naif.enqueue(naive)
+                if circular is not None:
+                    self.antrean_circular.enqueue(circular)
                 return None
 
-            self.undo_stack.pop()
-            self.redo_stack.push(aksi)
-            return item
+            hasil = data
 
-        elif aksi[0] == "DEQUEUE":
-            daftar_pesanan = aksi[1]
+        elif jenis == "DEQUEUE_NAIVE":
+            if not self._kembalikan_ke_depan(
+                self.antrean_naif, data
+            ):
+                return None
 
-            # Kembalikan ke depan dengan urutan yang benar
-            for item in reversed(daftar_pesanan):
-                if not self.antrean.enqueue_front(item):
-                    return None
+            hasil = data
 
-            self.undo_stack.pop()
-            self.redo_stack.push(aksi)
-            return daftar_pesanan
+        elif jenis == "DEQUEUE_CIRCULAR":
+            if not self._kembalikan_ke_depan(
+                self.antrean_circular, data
+            ):
+                return None
 
-        return None
+            hasil = data
+
+        else:
+            return None
+
+        self.undo_stack.pop()
+        self.redo_stack.push(aksi)
+
+        return hasil
 
     def redo(self):
         if self.redo_stack.is_empty():
             return None
 
         aksi = self.redo_stack.peek()
+        jenis = aksi[0]
+        data = aksi[1]
 
-        if aksi[0] == "ENQUEUE":
-            berhasil = self.antrean.enqueue(aksi[1])
-
-            if not berhasil:
+        if jenis == "ENQUEUE":
+            if not self.antrean_circular.enqueue(data):
                 return None
 
-            self.redo_stack.pop()
-            self.undo_stack.push(aksi)
-            return aksi[1]
+            self.antrean_naif.enqueue(data)
+            hasil = data
 
-        elif aksi[0] == "DEQUEUE":
-            jumlah = len(aksi[1])
-            daftar_pesanan = []
+        elif jenis in ("DEQUEUE_NAIVE", "DEQUEUE_CIRCULAR"):
+            if jenis == "DEQUEUE_NAIVE":
+                antrean = self.antrean_naif
+            else:
+                antrean = self.antrean_circular
 
-            for _ in range(jumlah):
-                item = self.antrean.dequeue()
+            daftar_aktual = []
 
-                if item is None:
-                    # Kembalikan pesanan yang telanjur dikeluarkan
-                    for pesanan in reversed(daftar_pesanan):
-                        self.antrean.enqueue_front(pesanan)
+            for item_seharusnya in data:
+                item = antrean.dequeue()
+
+                if not self._id_sama(item, item_seharusnya):
+                    if item is not None:
+                        daftar_aktual.append(item)
+
+                    self._kembalikan_ke_depan(
+                        antrean, daftar_aktual
+                    )
                     return None
 
-                daftar_pesanan.append(item)
+                daftar_aktual.append(item)
 
-            self.redo_stack.pop()
-            self.undo_stack.push(aksi)
-            return daftar_pesanan
-        
-        return None
-    
+            hasil = daftar_aktual
+
+        else:
+            return None
+
+        self.redo_stack.pop()
+        self.undo_stack.push(aksi)
+
+        return hasil
+
     def undo_last(self):
         return self.undo()
 
@@ -347,3 +441,4 @@ class AntreanDenganUndo:
 
     def history(self):
         return self.undo_stack.data.copy()
+
